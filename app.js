@@ -5,7 +5,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 // 導入路由
-// const authRoutes = require('./routes/auth');
+const authRoutes = require('./routes/auth');
 // const productRoutes = require('./routes/product');
 // const orderRoutes = require('./routes/order');
 // const inventoryRoutes = require('./routes/inventory');
@@ -33,7 +33,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // API 路由
-// app.use('/api/auth', authRoutes);
+app.use('/api/auth', authRoutes);
 // app.use('/api/products', productRoutes);
 // app.use('/api/orders', orderRoutes);
 // app.use('/api/inventory', inventoryRoutes);
