@@ -5,7 +5,7 @@ const Joi = require('joi');
 const registerSchema = Joi.object({
   username: Joi.string().alphanum().min(3).max(30).required(),
   email: Joi.string().email().required(),
-  password: Joi.string().min(6).required(),
+  password: Joi.string().min(4).required(),
   phone: Joi.string().pattern(/^1[3-9]\d{9}$/).optional()
 });
 
@@ -62,7 +62,7 @@ class AuthController {
   // 批量創建測試用戶
   async createTestUsers(req, res) {
     try {
-      const { count = 100000 } = req.body;
+      const { count = 10000 } = req.body;
 
       if (count > 100000) {
         return res.status(400).json({ error: '一次最多創建10萬個用戶' });

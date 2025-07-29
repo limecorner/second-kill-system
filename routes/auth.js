@@ -14,6 +14,6 @@ router.put('/password', authenticateToken, authController.changePassword);
 router.post('/logout', authenticateToken, authController.logout);
 
 // 管理員路由（用於測試）
-router.post('/create-test-users', authenticateToken, authController.createTestUsers);
+router.post('/create-test-users', authController.createTestUsers);
 
 module.exports = router; 

@@ -10,16 +10,16 @@ async function authenticateToken(req, res, next) {
     // 驗證 Token
     const decoded = verifyToken(token);
 
-        // 檢查用戶是否存在且狀態正常
+    // 檢查用戶是否存在且狀態正常
     const users = await query(
       'SELECT id, username, email, status FROM users WHERE id = ? AND status = ?',
       [decoded.userId, 'active']
     );
-    
+
     if (users.length === 0) {
       return res.status(401).json({ error: '用戶不存在或已被禁用' });
     }
-    
+
     // 將用戶信息添加到請求對象
     req.user = users[0];
     next();
@@ -42,11 +42,11 @@ async function optionalAuth(req, res, next) {
     const token = extractTokenFromHeader(authHeader);
     const decoded = verifyToken(token);
 
-        const users = await query(
+    const users = await query(
       'SELECT id, username, email, status FROM users WHERE id = ? AND status = ?',
       [decoded.userId, 'active']
     );
-    
+
     req.user = users.length > 0 ? users[0] : null;
     next();
 

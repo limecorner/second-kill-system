@@ -100,7 +100,7 @@ class AuthService {
   }
 
   // 批量創建測試用戶
-  async createTestUsers(count = 100000) {
+  async createTestUsers(count = 10000) {
     const users = [];
     const batchSize = 1000; // 每批處理1000個用戶
 
@@ -110,9 +110,9 @@ class AuthService {
 
       for (let j = 0; j < currentBatchSize; j++) {
         const userNum = i + j + 1;
-        const username = `testuser${userNum}`;
-        const email = `testuser${userNum}@example.com`;
-        const password = 'test123456';
+        const username = `user${userNum}`;
+        const email = `user${userNum}@example.com`;
+        const password = '1234';
         const passwordHash = await bcrypt.hash(password, 10);
 
         batch.push([username, email, passwordHash, `1380000${userNum.toString().padStart(4, '0')}`]);
