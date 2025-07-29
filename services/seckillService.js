@@ -1,6 +1,5 @@
 const seckillModel = require('../models/seckillModel');
 const { ensureConnected } = require('../config/redis');
-const luaScriptManager = require('../utils/luaScriptManager');
 const crypto = require('crypto');
 
 class SeckillService {
