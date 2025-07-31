@@ -1,5 +1,6 @@
 const seckillModel = require('../models/seckillModel');
 const { ensureConnected } = require('../config/redis');
+const luaScriptManager = require('../utils/luaScriptManager');
 const crypto = require('crypto');
 
 class SeckillService {
@@ -46,29 +47,35 @@ class SeckillService {
       console.log("🚀 ~ SeckillService ~ executeSeckill ~ quantity:", quantity)
       console.log("🚀 ~ SeckillService ~ executeSeckill ~ activityProduct.max_purchase_per_user:", activityProduct.max_purchase_per_user)
 
-      // 檢查用戶限購
-      const userPurchased = await redisClient.get(userPurchaseKey);
-      const currentPurchased = parseInt(userPurchased) || 0;
-
-      if (currentPurchased + quantity > activityProduct.max_purchase_per_user) {
-        throw new Error(`超出限購數量，每人最多購買${activityProduct.max_purchase_per_user}件`);
+      // 使用 Lua 腳本進行原子操作
+      const seckillScript = luaScriptManager.getScript('seckill');
+      if (!seckillScript) {
+        throw new Error('Lua 腳本未找到');
       }
 
-      // 檢查庫存
-      const availableStock = await redisClient.get(stockKey);
-      const currentStock = parseInt(availableStock) || 0;
+      // 執行 Lua 腳本
+      const result = await redisClient.eval(
+        seckillScript,
+        {
+          keys: [userPurchaseKey, stockKey, reservedStockKey],
+          arguments: [
+            quantity.toString(),
+            String(activityProduct.max_purchase_per_user || 1),
+            String(24 * 60 * 60) // 24小時過期
+          ]
+        }
+      );
 
-      if (currentStock < quantity) {
-        throw new Error('庫存不足');
+      // 檢查 Lua 腳本執行結果
+      if (result && Array.isArray(result) && result[0] === 'error') {
+        if (result[1] === 'EXCEED_LIMIT') {
+          throw new Error(`超出限購數量，每人最多購買${activityProduct.max_purchase_per_user}件`);
+        } else if (result[1] === 'INSUFFICIENT_STOCK') {
+          throw new Error('庫存不足');
+        } else {
+          throw new Error(result[2] || '秒殺失敗');
+        }
       }
-
-      // 扣減庫存
-      await redisClient.decrBy(stockKey, quantity);
-      await redisClient.incrBy(reservedStockKey, quantity);
-
-      // 更新用戶購買記錄
-      await redisClient.incrBy(userPurchaseKey, quantity);
-      await redisClient.expire(userPurchaseKey, 24 * 60 * 60); // 24小時過期
 
       // 7. 獲取商品信息
       const product = await seckillModel.getProductById(productId);
@@ -130,18 +137,19 @@ class SeckillService {
       } catch (error) {
         // 如果創建訂單失敗，使用Lua腳本回滾庫存
         try {
-          const rollbackScript = luaScriptManager.getScript('rollback_stock');
+          const rollbackScript = luaScriptManager.getScript('rollback-stock');
           if (rollbackScript) {
             await redisClient.eval(
               rollbackScript,
-              2, // 2個keys
-              stockKey,
-              reservedStockKey,
-              quantity.toString()
+              {
+                keys: [stockKey, reservedStockKey, userPurchaseKey],
+                arguments: [String(quantity)]
+              }
             );
+            console.log('✅ 庫存回滾成功');
           }
         } catch (releaseError) {
-          console.error('回滾Redis庫存失敗:', releaseError);
+          console.error('❌ 回滾Redis庫存失敗:', releaseError);
         }
         throw error;
       }
