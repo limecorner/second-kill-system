@@ -57,6 +57,22 @@ CREATE TABLE seckill_activities (
     CHECK (max_purchase_per_user > 0)
 );
 
+CREATE TABLE `activity_products` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `activity_id` int NOT NULL,
+  `product_id` int NOT NULL,
+  `max_purchase_per_user` int DEFAULT '1',
+  `available_stock` int NOT NULL,
+  `reserved_stock` int DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_activity_product` (`activity_id`,`product_id`),
+  KEY `product_id` (`product_id`),
+  CONSTRAINT `activity_products_ibfk_1` FOREIGN KEY (`activity_id`) REFERENCES `seckill_activities` (`id`),
+  CONSTRAINT `activity_products_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`)
+)
+
+
 -- 訂單表
 CREATE TABLE orders (
     id INT PRIMARY KEY AUTO_INCREMENT,

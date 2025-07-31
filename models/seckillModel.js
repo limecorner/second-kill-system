@@ -1,6 +1,23 @@
 const { query, beginTransaction, commitTransaction, rollbackTransaction } = require('../config/database');
 
 class SeckillModel {
+  // 獲取所有活動
+  async getAllActivities() {
+    const sql = `
+      SELECT 
+        a.*,
+        p.name as product_name,
+        p.description as product_description,
+        p.original_price,
+        p.seckill_price
+      FROM seckill_activities a
+      JOIN products p ON a.product_id = p.id
+      ORDER BY a.created_at DESC
+    `;
+    const rows = await query(sql);
+    return rows;
+  }
+
   // 獲取活動詳情
   async getActivityById(activityId) {
     const sql = `
