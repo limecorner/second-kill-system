@@ -81,18 +81,12 @@ async function createMultiProducts() {
     for (const activity of activities) {
       await query(`
         INSERT INTO seckill_activities (
-          id, product_id, activity_name, start_time, end_time,
-          total_stock, available_stock, reserved_stock,
-          max_purchase_per_user, status, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 'active', NOW())
-        ON DUPLICATE KEY UPDATE 
+          id,  activity_name, start_time, end_time, status, created_at
+        ) VALUES (?, ?, ?, ?, 'active', NOW())
+        ON DUPLICATE KEY UPDATE   
           activity_name = VALUES(activity_name),
-          max_purchase_per_user = VALUES(max_purchase_per_user),
-          available_stock = VALUES(available_stock)
       `, [
-        activity.id, activity.product_id, activity.activity_name,
-        startTime, endTime, activity.total_stock, activity.available_stock,
-        activity.max_purchase_per_user
+        activity.id, activity.activity_name, startTime, endTime
       ]);
 
       console.log(`✅ 活動創建成功: ${activity.activity_name}`);

@@ -35,26 +35,12 @@ CREATE TABLE products (
 -- 秒殺活動表
 CREATE TABLE seckill_activities (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    product_id INT NOT NULL,
     activity_name VARCHAR(200) NOT NULL,
     start_time TIMESTAMP NOT NULL,
     end_time TIMESTAMP NOT NULL,
-    total_stock INT NOT NULL,
-    available_stock INT NOT NULL,
-    reserved_stock INT DEFAULT 0, -- 已預扣庫存
-    max_purchase_per_user INT DEFAULT 1, -- 每人限購數量
     status ENUM('pending', 'active', 'ended', 'cancelled') DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_id) REFERENCES products(id),
-    INDEX idx_product_id (product_id),
-    INDEX idx_status (status),
-    INDEX idx_time (start_time, end_time),
-    CHECK (end_time > start_time),
-    CHECK (total_stock >= 0),
-    CHECK (available_stock >= 0),
-    CHECK (reserved_stock >= 0),
-    CHECK (max_purchase_per_user > 0)
 );
 
 CREATE TABLE `activity_products` (

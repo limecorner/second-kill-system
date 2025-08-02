@@ -60,11 +60,10 @@ async function createTestScenario() {
     endTime.setHours(16, 0, 0, 0); // 下午4點結束
 
     await query(`
-      INSERT INTO seckill_activities (
-        product_id, activity_name, start_time, end_time, 
-        total_stock, available_stock, max_purchase_per_user
-      ) VALUES (?, ?, ?, ?, 10, 10, 1)
-    `, [productId, 'iPhone 15 Pro 秒殺活動', tomorrow, endTime]);
+      INSERT INTO seckill_activities ( 
+        activity_name, start_time, end_time, 
+      ) VALUES (?, ?, ? )
+    `, ['iPhone 15 Pro 秒殺活動', tomorrow, endTime]);
 
     const activityResult = await query('SELECT LAST_INSERT_ID() as id');
     const activityId = activityResult[0].id;

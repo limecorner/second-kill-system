@@ -19,9 +19,6 @@ async function addNecessaryIndexes() {
       { table: 'products', name: 'idx_category', columns: 'category' },
 
       // seckill_activities 表
-      { table: 'seckill_activities', name: 'idx_product_id', columns: 'product_id' },
-      { table: 'seckill_activities', name: 'idx_status', columns: 'status' },
-      { table: 'seckill_activities', name: 'idx_time', columns: 'start_time, end_time' },
 
       // orders 表
       { table: 'orders', name: 'idx_order_no', columns: 'order_no' },

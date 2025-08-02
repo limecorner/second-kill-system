@@ -15,6 +15,7 @@ class SeckillService {
   async executeSeckill(userId, activityId, productId, quantity = 1, ipAddress, userAgent) {
     try {
       // 1. 檢查活動是否存在且有效
+      // 這裡要改
       const activity = await seckillModel.getActivityById(activityId);
       if (!activity) {
         throw new Error('活動不存在');
@@ -43,9 +44,6 @@ class SeckillService {
       const userPurchaseKey = `seckill:user:${userId}:activity:${activityId}:product:${productId}`;
       const stockKey = `seckill:activity:${activityId}:product:${productId}:stock`;
       const reservedStockKey = `seckill:activity:${activityId}:product:${productId}:reserved`;
-
-      console.log("🚀 ~ SeckillService ~ executeSeckill ~ quantity:", quantity)
-      console.log("🚀 ~ SeckillService ~ executeSeckill ~ activityProduct.max_purchase_per_user:", activityProduct.max_purchase_per_user)
 
       // 使用 Lua 腳本進行原子操作
       const seckillScript = luaScriptManager.getScript('seckill');
