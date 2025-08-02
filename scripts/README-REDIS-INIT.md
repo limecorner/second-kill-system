@@ -87,12 +87,6 @@ seckill:config:seckill_button_disable_seconds                   # 秒殺按鈕�
 
 ## 使用場景
 
-### 1. 系統啟動時初始化
-```bash
-# 初始化所有活動
-node scripts/init-multi-products-redis.js
-```
-
 ### 2. 新增活動後初始化
 ```bash
 # 初始化特定活動
