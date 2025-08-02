@@ -2,6 +2,13 @@
 
 一個基於 Node.js + Express + MySQL + Redis 的高併發秒殺系統。
 
+# 使用
+1. reset RDB data
+node scripts/reset-data.js
+2. ini redis data: activity 1
+node scripts/init-redis-by-activity.js 1 
+
+
 ## 功能特點
 
 - 🚀 高併發處理
