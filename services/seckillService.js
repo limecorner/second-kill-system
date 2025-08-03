@@ -15,7 +15,6 @@ class SeckillService {
   async executeSeckill(userId, activityId, productId, quantity = 1, ipAddress, userAgent) {
     try {
       // 1. 檢查活動是否存在且有效
-      // 這裡要改
       const activity = await seckillModel.getActivityById(activityId);
       if (!activity) {
         throw new Error('活動不存在');
@@ -75,83 +74,179 @@ class SeckillService {
         }
       }
 
-      // 7. 獲取商品信息
+      // 6. 獲取商品信息
       const product = await seckillModel.getProductById(productId);
       if (!product) {
         throw new Error('商品不存在');
       }
 
-      // 8. 獲取系統配置
-      const paymentTimeoutMinutes = 15; // 默認15分鐘
-      const paymentTimeout = new Date(Date.now() + paymentTimeoutMinutes * 60 * 1000);
-
-      // 9. 生成訂單號
+      // 7. 生成訂單號
       const orderNo = this.generateOrderNo();
 
-      // 10. 創建訂單
-      let orderId;
+      // 8. 異步創建訂單 - 使用 Redis 作為消息隊列
+      const orderData = {
+        orderNo,
+        userId,
+        activityId,
+        productId,
+        quantity,
+        unitPrice: product.seckill_price,
+        totalAmount: product.seckill_price * quantity,
+        paymentTimeout: new Date(Date.now() + 15 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' '), // 15分鐘，轉換為 MySQL DATETIME 格式
+        ipAddress,
+        userAgent,
+        timestamp: Date.now()
+      };
+
+      // 將訂單數據存入 Redis 隊列
+      await redisClient.sendCommand(['LPUSH', 'order_queue', JSON.stringify(orderData)]);
+
+      // 設置隊列處理標記
+      await redisClient.sendCommand(['SETEX', `order_processing:${orderNo}`, '3000', '1']); // 50分鐘過期
+
+      // 9. 立即返回成功響應
+      return {
+        orderNo,
+        activityId,
+        productId,
+        quantity,
+        unitPrice: product.seckill_price,
+        totalAmount: product.seckill_price * quantity,
+        status: 'processing',
+        message: '秒殺成功，訂單正在處理中'
+      };
+
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // 處理訂單隊列
+  async processOrderQueue() {
+    const redisClient = await ensureConnected();
+
+    while (true) {
       try {
-        orderId = await seckillModel.createOrder({
-          orderNo,
-          userId,
-          activityId,
-          productId,
-          quantity,
-          unitPrice: product.seckill_price,
-          totalAmount: product.seckill_price * quantity,
-          paymentTimeout
-        });
+        // 從隊列中取出訂單
+        const orderData = await redisClient.sendCommand(['BRPOP', 'order_queue', '1']);
 
-        // 11. 用戶購買記錄已在Lua腳本中更新
-
-        // 12. 記錄操作日誌
-        await seckillModel.logOperation(
-          userId,
-          'seckill_purchase',
-          'order',
-          orderId,
-          {
-            activityId,
-            productId,
-            quantity,
-            unitPrice: product.seckill_price,
-            totalAmount: product.seckill_price * quantity
-          },
-          ipAddress,
-          userAgent
-        );
-
-        return {
-          orderId,
-          orderNo,
-          activityId,
-          productId,
-          quantity,
-          unitPrice: product.seckill_price,
-          totalAmount: product.seckill_price * quantity,
-          paymentTimeout
-        };
-
-      } catch (error) {
-        // 如果創建訂單失敗，使用Lua腳本回滾庫存
-        try {
-          const rollbackScript = luaScriptManager.getScript('rollback-stock');
-          if (rollbackScript) {
-            await redisClient.eval(
-              rollbackScript,
-              {
-                keys: [stockKey, reservedStockKey, userPurchaseKey],
-                arguments: [String(quantity)]
-              }
-            );
-            console.log('✅ 庫存回滾成功');
-          }
-        } catch (releaseError) {
-          console.error('❌ 回滾Redis庫存失敗:', releaseError);
+        if (orderData) {
+          const order = JSON.parse(orderData[1]);
+          await this.createOrderFromQueue(order);
         }
-        throw error;
+      } catch (error) {
+        console.error('處理訂單隊列錯誤:', error);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒後重試
+      }
+    }
+  }
+
+  // 從隊列創建訂單
+  async createOrderFromQueue(orderData) {
+    const redisClient = await ensureConnected();
+    const { orderNo, userId, activityId, productId, quantity, unitPrice, totalAmount, paymentTimeout, ipAddress, userAgent } = orderData;
+
+    try {
+      // 檢查是否已經處理過
+      const processing = await redisClient.sendCommand(['GET', `order_processing:${orderNo}`]);
+      if (!processing) {
+        console.log(`訂單 ${orderNo} 已處理或過期`);
+        return;
       }
 
+      // 創建訂單
+      const orderId = await seckillModel.createOrder({
+        orderNo,
+        userId,
+        activityId,
+        productId,
+        quantity,
+        unitPrice,
+        totalAmount,
+        paymentTimeout
+      });
+
+      // 記錄操作日誌
+      await seckillModel.logOperation(
+        userId,
+        'seckill_purchase',
+        'order',
+        orderId,
+        {
+          activityId,
+          productId,
+          quantity,
+          unitPrice,
+          totalAmount
+        },
+        ipAddress,
+        userAgent
+      );
+
+      // 移除處理標記
+      await redisClient.sendCommand(['DEL', `order_processing:${orderNo}`]);
+
+      console.log(`✅ 訂單創建成功: ${orderNo}, ID: ${orderId}`);
+
+    } catch (error) {
+      console.error(`❌ 創建訂單失敗: ${orderNo}`, error);
+
+      // 如果創建訂單失敗，回滾 Redis 庫存
+      try {
+        const userPurchaseKey = `seckill:user:${userId}:activity:${activityId}:product:${productId}`;
+        const stockKey = `seckill:activity:${activityId}:product:${productId}:stock`;
+        const reservedStockKey = `seckill:activity:${activityId}:product:${productId}:reserved`;
+
+        const rollbackScript = luaScriptManager.getScript('rollback-stock');
+        if (rollbackScript) {
+          await redisClient.eval(
+            rollbackScript,
+            {
+              keys: [stockKey, reservedStockKey, userPurchaseKey],
+              arguments: [String(quantity)]
+            }
+          );
+          console.log(`✅ 庫存回滾成功: ${orderNo}`);
+        }
+      } catch (rollbackError) {
+        console.error(`❌ 回滾庫存失敗: ${orderNo}`, rollbackError);
+      }
+
+      // 移除處理標記
+      await redisClient.sendCommand(['DEL', `order_processing:${orderNo}`]);
+    }
+  }
+
+  // 獲取訂單狀態
+  async getOrderStatus(orderNo) {
+    try {
+      const order = await seckillModel.getOrderByOrderNo(orderNo);
+      if (order) {
+        return {
+          orderNo,
+          status: order.status,
+          orderId: order.id,
+          createdAt: order.created_at
+        };
+      } else {
+        // 檢查是否還在處理中
+        const redisClient = await ensureConnected();
+        const processing = await redisClient.sendCommand(['GET', `order_processing:${orderNo}`]);
+
+        if (processing) {
+          return {
+            orderNo,
+            status: 'processing',
+            message: '訂單正在處理中'
+          };
+        } else {
+          return {
+            orderNo,
+            status: 'not_found',
+            message: '訂單不存在'
+          };
+        }
+      }
     } catch (error) {
       throw error;
     }
